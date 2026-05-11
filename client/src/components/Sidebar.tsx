@@ -1,53 +1,39 @@
-import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
-const Sidebar: React.FC = () => {
+export default function Sidebar() {
+  const location = useLocation();
+
   const menuItems = [
-    { name: 'Dashboard', icon: '📊' },
-    { name: 'Siparişler', icon: '📦' },
-    { name: 'Ürünler', icon: '🏷️' },
-    { name: 'Müşteriler', icon: '👥' },
-    { name: 'Kampanyalar', icon: '🚀' },
-    { name: 'Ayarlar', icon: '⚙️' },
+    { name: 'Dashboard', icon: '📊', path: '/' },
+    { name: 'Siparişler', icon: '📦', path: '/orders' },
+    { name: 'Ürünler', icon: '🏷️', path: '/products' },
+    { name: 'Müşteriler', icon: '👥', path: '/customers' },
+    { name: 'Kampanyalar', icon: '🚀', path: '/campaigns' },
+    { name: 'Ayarlar', icon: '⚙️', path: '/settings' },
   ];
 
   return (
-<div className="w-64 min-w-[256px] h-screen bg-white text-gray-800 flex flex-col fixed left-0 top-0 border-r border-gray-200 shadow-sm z-50">      <div className="p-6 text-2xl font-black flex items-center gap-2">
-        <span className="text-[#ff6000]">hepsi</span>
-        <span className="text-gray-900">burada</span>
-        <div className="w-2 h-2 bg-[#ff6000] rounded-full mt-2"></div>
+    <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 p-6 z-10">
+      <div className="text-[#ff6000] text-2xl font-black mb-10 px-3 tracking-tighter">
+        HEPSİBURADA <span className="text-gray-400 text-sm font-normal">satıcı</span>
       </div>
-
-      <div className="px-6 mb-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
-        Satıcı Paneli
-      </div>
-
-      <nav className="flex-1 overflow-y-auto">
+      
+      <nav className="space-y-2">
         {menuItems.map((item) => (
-          <div
-            key={item.name}
-            className="px-6 py-4 flex items-center gap-4 hover:bg-orange-50 hover:text-[#ff6000] cursor-pointer transition-all border-l-4 border-transparent hover:border-[#ff6000] group"
+          <Link
+            key={item.path}
+            to={item.path}
+            className={`flex items-center gap-3 p-3 rounded-xl font-medium transition-all duration-200 ${
+              location.pathname === item.path
+                ? 'bg-orange-50 text-[#ff6000] shadow-sm'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+            }`}
           >
-            <span className="text-xl group-hover:scale-110 transition-transform">{item.icon}</span>
-            <span className="font-semibold text-sm">{item.name}</span>
-          </div>
+            <span className="text-xl">{item.icon}</span>
+            {item.name}
+          </Link>
         ))}
       </nav>
-
-      {/* Alt Kısım */}
-      <div className="p-6 border-t border-gray-100 bg-gray-50">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-[#ff6000] rounded-full flex items-center justify-center text-white font-bold">
-            B
-          </div>
-          <div className="text-sm">
-            <p className="font-bold text-gray-800">Buğra Uner</p>
-            <p className="text-xs text-gray-500">Premium Satıcı</p>
-          </div>
-        </div>
-        <p className="text-[10px] text-gray-400">© 2026 Hepsiburada Partner</p>
-      </div>
-    </div>
+    </aside>
   );
-};
-
-export default Sidebar;
+}
