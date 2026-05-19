@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import Modal from 'react-modal'; // Example using react-modal
+import ProductDetailModal from '../components/ProductDetailModal';
+
 
 interface Product {
   id: number;
@@ -18,6 +21,8 @@ export default function Products() {
   const [showForm, setShowForm] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
 
   
 
@@ -97,16 +102,6 @@ export default function Products() {
     });
   }
 
-  
-
-
-/*
-  const handleDelete = (id: number) => {
-    console.log("Delete product with ID:", id);   
-      setProductList(prevProducts => prevProducts.filter(product => product.id !== id));
-
-  }
-  */
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -236,8 +231,9 @@ export default function Products() {
       ) : (
         /* Ürün Kartları Container */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          
           {productList.map((product: Product) => (
-            <div 
+            <div onClick={() => setSelectedProduct(product)} 
               key={product.id} 
               className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-xl hover:border-orange-200 transition-all group flex flex-col justify-between"
             >
@@ -279,12 +275,25 @@ export default function Products() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 border-t border-gray-50 pt-4">
-                  <button onClick={() => handleEdit(product)} className="text-gray-500 text-sm font-bold py-2 rounded-lg hover:bg-gray-100 transition-colors">
-                    Düzenle
-                  </button>
-                  <button onClick={() => handleDelete(product.id)} className="text-red-500 text-sm font-bold py-2 rounded-lg hover:bg-red-50 transition-colors">
-                    Sil
-                  </button>
+                  <button 
+    onClick={(e) => { 
+      e.stopPropagation(); // <-- Sihirli dokunuş: Tıklamanın karta sıçramasını engeller!
+      handleEdit(product); 
+    }} 
+    className="text-gray-500 text-sm font-bold py-2 rounded-lg hover:bg-gray-100 transition-colors"
+  >
+    Düzenle
+  </button>
+  
+  <button 
+    onClick={(e) => { 
+      e.stopPropagation(); // <-- Sihirli dokunuş: Tıklamanın karta sıçramasını engeller!
+      handleDelete(product.id); 
+    }} 
+    className="text-red-500 text-sm font-bold py-2 rounded-lg hover:bg-red-50 transition-colors"
+  >
+    Sil
+  </button>
                 </div>
               </div>
             </div>
@@ -300,6 +309,10 @@ export default function Products() {
           <p className="text-gray-500 mt-2">Satış yapmaya başlamak için ilk ürününü hemen ekle.</p>
         </div>
       )}
+
+      <ProductDetailModal 
+      product={selectedProduct} 
+      onClose={() => setSelectedProduct(null)} />
     </main>
   );
 }
