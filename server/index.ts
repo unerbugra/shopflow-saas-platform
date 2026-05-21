@@ -50,6 +50,92 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/products', async (req: Request, res: Response) => {
+  const { name, description, price, stock_quantity } = req.body;
+
+  try {
+    const result = await query(
+      'INSERT INTO products (name, description, price, stock_quantity) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, description, price, stock_quantity]
+    );
+
+    const product: Product = result.rows[0];
+    res.status(201).json(product);
+  } catch (error: any) {
+    console.error("Hata:", error.message);
+    res.status(500).json({ success: false, message: "Sunucu hatası" });
+  }
+});
+
+app.put('/api/products/:id', async (req: Request, res: Response) => {
+  const productId = req.params.id;
+  const { name, description, price, stock_quantity } = req.body;
+
+  try {
+    const result = await query(
+      'UPDATE products SET name = $1, description = $2, price = $3, stock_quantity = $4 WHERE id = $5 RETURNING *',
+      [name, description, price, stock_quantity, productId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Ürün bulunamadı." });
+    }
+
+    const updatedProduct: Product = result.rows[0];
+    res.json(updatedProduct);
+
+  } catch (error: any) {
+    console.error("Hata:", error.message);
+    res.status(500).json({ success: false, message: "Sunucu hatası" });
+  }
+});
+
+app.delete('/api/products/:id', async (req: Request, res: Response) => {
+  const productId = req.params.id;
+
+  try {
+    const result = await query('DELETE FROM products WHERE id = $1 RETURNING *', [productId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Ürün bulunamadı." });
+    }
+
+    res.json({ success: true, message: "Ürün başarıyla silindi." });
+
+  } catch (error: any) {
+    console.error("Hata:", error.message);
+    res.status(500).json({ success: false, message: "Sunucu hatası" });
+  }
+});
+
+app.post('/api/orders', async (req: Request, res: Response) => {
+  try {
+    const customerId: number = req.body.customer_id;
+    const items: { product_id: number; quantity: number; unit_price: number }[] = req.body.items;
+
+    const stockCheck: { stock_quantity: number }[] = await Promise.all(
+      items.map(async (item) => {
+        const result = await query('SELECT stock_quantity FROM products WHERE id = $1', [item.product_id]);
+        if (result.rows.length === 0) {
+          throw new Error(`Ürün ID ${item.product_id} bulunamadı.`);
+        }
+        return result.rows[0]; 
+      })
+    );
+
+    for (let i = 0; i < items.length; i++) {
+      if (stockCheck[i].stock_quantity < items[i].quantity) {
+        return res.status(400).json({ success: false, message: `Ürün ID ${items[i].product_id} için yeterli stok yok.` });
+      }
+    }
+
+  } catch (error: any) {
+    console.error("Sipariş hatası:", error.message);
+    return res.status(500).json({ success: false, message: error.message || "Sunucu hatası." });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server ${PORT} portunda TS ile canavar gibi çalışıyor...`);
 });

@@ -18,7 +18,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "pg": "^8.20.0",
-    "postcss": "^8.5.14"
+    "postcss": "^8.5.14",
+    "react-modal": "^3.16.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
