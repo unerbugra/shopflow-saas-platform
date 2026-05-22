@@ -108,6 +108,7 @@ app.delete('/api/products/:id', async (req: Request, res: Response) => {
   }
 });
 
+
 app.post('/api/orders', async (req: Request, res: Response) => {
   try {
     const customerId: number = req.body.customer_id;
@@ -129,12 +130,42 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       }
     }
 
+    const totalAmount: number[] = items.map(item => item.quantity * item.unit_price);
+
+    try {
+      await query('BEGIN');
+      
+      const result = await query(
+        'INSERT INTO orders (customer_id, total_amount, status) VALUES ($1, $2, $3) RETURNING id', 
+        [customerId, totalAmount.reduce((a, b) => a + b), 'pending']
+      );
+      const order_id = result.rows[0].id; 
+
+      for (const item of items) {
+        await query(
+          'INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES ($1, $2, $3, $4)', 
+          [order_id, item.product_id, item.quantity, item.unit_price]
+        );
+
+        await query(
+          'UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2', 
+          [item.quantity, item.product_id]
+        );
+      }
+      
+      await query('COMMIT');
+      return res.status(201).json({ success: true, message: "Sipariş başarıyla oluşturuldu.", order_id }); 
+
+    } catch (error: any) {
+      await query('ROLLBACK');
+      throw error; 
+    }
+
   } catch (error: any) {
     console.error("Sipariş hatası:", error.message);
     return res.status(500).json({ success: false, message: error.message || "Sunucu hatası." });
   }
-});
-
+}); 
 
 app.listen(PORT, () => {
   console.log(`Server ${PORT} portunda TS ile canavar gibi çalışıyor...`);
