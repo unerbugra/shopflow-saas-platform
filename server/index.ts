@@ -2,11 +2,19 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { query } from './db.js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const JWT_SECRET = process.env.JWT_SECRET; 
+
+if (!JWT_SECRET) {
+  console.error("KRİTİK HATA: JWT_SECRET .env dosyasında tanımlanmamış!");
+  process.exit(1);
+}
 
 app.use(cors());
 app.use(express.json());
@@ -166,6 +174,79 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message || "Sunucu hatası." });
   }
 }); 
+
+app.post('/api/auth/register', async (req: Request, res: Response) => {  
+  const { first_name, last_name, email, password, phone, address } = req.body;
+  
+  if (!email || !password || !first_name || !last_name) {
+    return res.status(400).json({ success: false, message: "Lütfen gerekli alanları doldurun." });
+  }
+
+  try {
+    const emailCheck = await query('SELECT EXISTS(SELECT 1 FROM customers WHERE email = $1)', [email]);
+
+    if (emailCheck.rows[0].exists === true) {
+      return res.status(400).json({ success: false, message: "Bu email zaten kullanılıyor." });
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const query1 = 'INSERT INTO customers (first_name, last_name, email, password_hash, phone, address) VALUES ($1, $2, $3, $4, $5, $6)';
+    await query(query1, [first_name, last_name, email, hashedPassword, phone, address]);
+
+    return res.status(201).json({ success: true, message: 'User registered successfully!' });
+
+  } catch (error) {
+    console.error('Error registering user:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: "Lütfen email ve şifre girin." });
+  }
+
+  try {
+    const userCheck = await query('SELECT * FROM customers WHERE email = $1', [email]);
+
+    if (userCheck.rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    const user = userCheck.rows[0];
+
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role }, 
+      JWT_SECRET as string, 
+      { expiresIn: '1h' }
+    );
+
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Login successful!', 
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+  } catch (error) {
+    console.error('Error during login:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server ${PORT} portunda TS ile canavar gibi çalışıyor...`);
