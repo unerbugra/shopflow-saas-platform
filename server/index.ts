@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { query } from './db.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { NextFunction } from 'express';
 
 dotenv.config();
 
@@ -27,6 +28,29 @@ interface Product {
   stock_quantity: number;
   created_at: string;
 }
+
+interface TokenPayload {
+  userId: number; 
+  role: string;
+}
+
+export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1]; 
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as TokenPayload;
+    
+    (req as any).user = decoded; 
+    next();
+  } catch (error) {
+    return res.status(403).json({ success: false, message: 'Invalid or expired token' });
+  }
+};
 
 app.get('/api/products', async (req: Request, res: Response) => {
   try {
@@ -117,9 +141,9 @@ app.delete('/api/products/:id', async (req: Request, res: Response) => {
 });
 
 
-app.post('/api/orders', async (req: Request, res: Response) => {
+app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const customerId: number = req.body.customer_id;
+    const customerId: number = (req as any).user.userId; 
     const items: { product_id: number; quantity: number; unit_price: number }[] = req.body.items;
 
     const stockCheck: { stock_quantity: number }[] = await Promise.all(

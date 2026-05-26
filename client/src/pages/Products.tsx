@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Modal from 'react-modal'; // Example using react-modal
+import Modal from 'react-modal'; 
 import ProductDetailModal from '../components/ProductDetailModal';
 
 
@@ -29,7 +29,6 @@ export default function Products() {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); // Prevents page refresh
     console.log("Submitted Name:", newProduct.name);
-    // Add API call or logic here
 
     const isEditing = editingProductId !== null;
     const url = isEditing 
@@ -48,7 +47,6 @@ export default function Products() {
     .then(data => {
       if (isEditing) {
         console.log('Ürün başarıyla güncellendi:', data);
-        // State'deki eski ürünü bulup yenisiyle değiştiriyoruz (Sayfa yenilenmeden!)
         setProductList(prev => prev.map(p => p.id === editingProductId ? data : p));
       } else {
         console.log('Ürün başarıyla eklendi:', data);
@@ -301,7 +299,6 @@ export default function Products() {
         </div>
       )}
 
-      {/* Eğer ürün yoksa gösterilecek alan */}
       {!loading && productList.length === 0 && (
         <div className="bg-white rounded-3xl p-20 text-center border-2 border-dashed border-gray-100">
           <div className="text-6xl mb-4">🛒</div>
