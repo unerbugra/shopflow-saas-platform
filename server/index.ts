@@ -272,6 +272,20 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
+
+
+app.get('/api/auth/verify', authMiddleware, (req: any, res: any) => {
+  try {
+    res.status(200).json({
+      success: true,
+      user: req.user 
+    });
+  } catch (error) {
+    console.error('Verify endpoint hatası şef:', error);
+    res.status(500).json({ success: false, message: 'Sunucu hatası!' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server ${PORT} portunda TS ile canavar gibi çalışıyor...`);
 });

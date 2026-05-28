@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import type { ReactNode } from 'react'; 
+
 interface User {
   id: number;
   email: string;
@@ -22,15 +23,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('shopflow_token');
-    const storedUser = localStorage.getItem('shopflow_user');
+    const verifyUser = async () => {
+      const storedToken = localStorage.getItem('shopflow_token');
+      const storedUser = localStorage.getItem('shopflow_user');
 
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
-    
-    setLoading(false);
+      // Eğer lokalde bilgi yoksa direkt loading'i kapat ve bitir
+      if (!storedToken || !storedUser) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Backend'e token'ın hala geçerli olup olmadığını soruyoruz
+        // NOT: Kendi axios instance'ını veya fetch yapını proje mimarine göre güncelleyebilirsin şef
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/verify`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${storedToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json(); // Backend güncel user verisini dönebilir
+          setToken(storedToken);
+          setUser(data.user || JSON.parse(storedUser));
+        } else {
+          // Token geçersiz veya süresi dolmuşsa lokal üssü temizle
+          logout();
+        }
+      } catch (error) {
+        console.error('Auth doğrulanırken hata oluştu şef:', error);
+        // Ağ hatası vs. durumunda kullanıcıyı hemen atmamak için mevcut veriyi koruyabiliriz,
+        // ya da güvenlik için tamamen logout yapabiliriz. Şimdilik lokal veriyi set edelim:
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    verifyUser();
   }, []);
 
   const login = (userData: User, tokenData: string) => {
