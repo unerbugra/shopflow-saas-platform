@@ -30,7 +30,8 @@ interface Product {
 }
 
 interface TokenPayload {
-  userId: number; 
+  id: number; 
+  email: string;
   role: string;
 }
 
@@ -43,8 +44,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as TokenPayload;
-    
+    const decoded = jwt.verify(token, JWT_SECRET as string) as TokenPayload;
     (req as any).user = decoded; 
     next();
   } catch (error) {
@@ -65,17 +65,13 @@ app.get('/api/products', async (req: Request, res: Response) => {
 
 app.get('/api/products/:id', async (req: Request, res: Response) => {
   const productId = req.params.id;
-
   try {
     const result = await query('SELECT * FROM products WHERE id = $1', [productId]);
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Ürün bulunamadı." });
     }
-
     const product: Product = result.rows[0];
     res.json(product);
-
   } catch (error: any) {
     console.error("Hata:", error.message);
     res.status(500).json({ success: false, message: "Sunucu hatası" });
@@ -84,13 +80,11 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
 
 app.post('/api/products', async (req: Request, res: Response) => {
   const { name, description, price, stock_quantity } = req.body;
-
   try {
     const result = await query(
       'INSERT INTO products (name, description, price, stock_quantity) VALUES ($1, $2, $3, $4) RETURNING *',
       [name, description, price, stock_quantity]
     );
-
     const product: Product = result.rows[0];
     res.status(201).json(product);
   } catch (error: any) {
@@ -102,20 +96,16 @@ app.post('/api/products', async (req: Request, res: Response) => {
 app.put('/api/products/:id', async (req: Request, res: Response) => {
   const productId = req.params.id;
   const { name, description, price, stock_quantity } = req.body;
-
   try {
     const result = await query(
       'UPDATE products SET name = $1, description = $2, price = $3, stock_quantity = $4 WHERE id = $5 RETURNING *',
       [name, description, price, stock_quantity, productId]
     );
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Ürün bulunamadı." });
     }
-
     const updatedProduct: Product = result.rows[0];
     res.json(updatedProduct);
-
   } catch (error: any) {
     console.error("Hata:", error.message);
     res.status(500).json({ success: false, message: "Sunucu hatası" });
@@ -124,26 +114,21 @@ app.put('/api/products/:id', async (req: Request, res: Response) => {
 
 app.delete('/api/products/:id', async (req: Request, res: Response) => {
   const productId = req.params.id;
-
   try {
     const result = await query('DELETE FROM products WHERE id = $1 RETURNING *', [productId]);
-
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Ürün bulunamadı." });
     }
-
     res.json({ success: true, message: "Ürün başarıyla silindi." });
-
   } catch (error: any) {
     console.error("Hata:", error.message);
     res.status(500).json({ success: false, message: "Sunucu hatası" });
   }
 });
 
-
 app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const customerId: number = (req as any).user.userId; 
+    const customerId: number = (req as any).user.id; 
     const items: { product_id: number; quantity: number; unit_price: number }[] = req.body.items;
 
     const stockCheck: { stock_quantity: number }[] = await Promise.all(
@@ -199,6 +184,7 @@ app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
   }
 }); 
 
+
 app.post('/api/auth/register', async (req: Request, res: Response) => {  
   const { first_name, last_name, email, password, phone, address } = req.body;
   
@@ -216,10 +202,30 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const query1 = 'INSERT INTO customers (first_name, last_name, email, password_hash, phone, address) VALUES ($1, $2, $3, $4, $5, $6)';
-    await query(query1, [first_name, last_name, email, hashedPassword, phone, address]);
+    const query1 = `
+      INSERT INTO customers (first_name, last_name, email, password_hash, phone, address) 
+      VALUES ($1, $2, $3, $4, $5, $6) 
+      RETURNING id, email, role
+    `;
+    const result = await query(query1, [first_name, last_name, email, hashedPassword, phone, address]);
+    const newUser = result.rows[0];
 
-    return res.status(201).json({ success: true, message: 'User registered successfully!' });
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email, role: newUser.role }, 
+      JWT_SECRET as string, 
+      { expiresIn: '1h' }
+    );
+
+    return res.status(201).json({ 
+      success: true, 
+      message: 'Kayıt başarıyla tamamlandı şef!',
+      token,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        role: newUser.role
+      }
+    });
 
   } catch (error) {
     console.error('Error registering user:', error);
@@ -242,7 +248,6 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const user = userCheck.rows[0];
-
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
@@ -250,7 +255,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role }, 
+      { id: user.id, email: user.email, role: user.role }, 
       JWT_SECRET as string, 
       { expiresIn: '1h' }
     );
@@ -271,8 +276,6 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
-
-
 
 app.get('/api/auth/verify', authMiddleware, (req: any, res: any) => {
   try {
