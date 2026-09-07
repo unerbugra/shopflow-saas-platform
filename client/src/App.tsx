@@ -10,6 +10,7 @@ import LoginForm from './components/Login';
 import ProtectedRoute from './components/ProtectedRoute'; // 2. Koruma kalkanını import ettik
 import { AuthProvider, useAuth } from './context/AuthContext'; 
 import RegisterForm from './components/Register';
+import CustomerStorefront from './pages/CustomerStorefront';
 
 // Rotaları ve Sidebar görünümünü Context'e göre yöneteceğimiz ana gövde
 function AppContent() {
@@ -34,6 +35,8 @@ function AppContent() {
           <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
           <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/store" element={<CustomerStorefront />} /> 
+
         </Routes>
       </div>
     </div>
