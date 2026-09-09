@@ -11,6 +11,7 @@ import ProtectedRoute from './components/ProtectedRoute'; // 2. Koruma kalkanın
 import { AuthProvider, useAuth } from './context/AuthContext'; 
 import RegisterForm from './components/Register';
 import CustomerStorefront from './pages/CustomerStorefront';
+import Unauthorized from './pages/Unauthorized'; // Yetkisiz erişim sayfasını import ettik
 
 // Rotaları ve Sidebar görünümünü Context'e göre yöneteceğimiz ana gövde
 function AppContent() {
@@ -27,15 +28,16 @@ function AppContent() {
           {/* Herkese açık (Public) Rota */}
           <Route path="/login" element={<LoginForm />} />
           <Route path="/register" element={<RegisterForm />} />
+          <Route path="/unauthorized" element={<Unauthorized />} /> {/* Yetkisiz erişim sayfası */}
 
           {/* Korumalı (Protected) Rotalar */}
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-          <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-          <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
-          <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/store" element={<CustomerStorefront />} /> 
+          <Route path="/" element={<ProtectedRoute allowedRoles={['admin']}><Dashboard /></ProtectedRoute>} />
+          <Route path="/orders" element={<ProtectedRoute allowedRoles={['admin']}><Orders /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute allowedRoles={['admin']}><Products /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute allowedRoles={['admin']}><Customers /></ProtectedRoute>} />
+          <Route path="/campaigns" element={<ProtectedRoute allowedRoles={['admin']}><Campaigns /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><Settings /></ProtectedRoute>} />
+          <Route path="/store" element={<ProtectedRoute allowedRoles={['admin','customer']}><CustomerStorefront /></ProtectedRoute>} /> 
 
         </Routes>
       </div>
