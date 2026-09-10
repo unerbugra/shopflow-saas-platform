@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import RegisterForm from './components/Register';
 import CustomerStorefront from './pages/CustomerStorefront';
 import Unauthorized from './pages/Unauthorized'; // Yetkisiz erişim sayfasını import ettik
+import CustomerSidebar from './components/CustomerSidebar';
 
 // Rotaları ve Sidebar görünümünü Context'e göre yöneteceğimiz ana gövde
 function AppContent() {
@@ -20,7 +21,8 @@ function AppContent() {
   return (
     <div className="flex w-full min-h-screen bg-gray-50 text-gray-900">
       {/* 3. KRİTİK DOKUNUŞ: Kullanıcı giriş yapmadıysa Sidebar'ı tamamen gizle */}
-      {user && <Sidebar />}
+      {user && user.role === 'admin' && <Sidebar />}
+      {user && user.role === 'customer' && <CustomerSidebar />}
 
       {/* Eğer kullanıcı giriş yapmadıysa, menü gizlendiği için pl-64 (sol boşluk) kalkmalı */}
       <div className={`flex-1 w-full ${user ? 'pl-64' : ''}`}> 
