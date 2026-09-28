@@ -19,6 +19,7 @@ interface CartContextType {
   addToCart: (newItem: Product, newQuantity: number) => void;
   removeFromCart: (productId: number) => void;
   increaseQuantity: (productId: number) => void;
+  decreaseQuantity: (productId: number) => void;
 }
 
 interface CartProviderProps {
@@ -83,8 +84,18 @@ setCart(updatedCart);
 
 }
 
+function decreaseQuantity(productId: number) {
+  const updatedCart = cart.map(item =>
+    item.item.id === productId && item.quantity > 1
+      ? { ...item, quantity: item.quantity - 1 }
+      : item
+  );
+
+  setCart(updatedCart);
+}
+
 return (
-  <CartContext.Provider value={{ cart, addToCart, removeFromCart, increaseQuantity }}>
+  <CartContext.Provider value={{ cart, addToCart, removeFromCart, increaseQuantity, decreaseQuantity }}>
     {children}
   </CartContext.Provider>
 );

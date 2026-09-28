@@ -2,7 +2,7 @@ import { useCart } from "../context/CartContext";
 
 
 export default function Cart() {
-  const { cart, removeFromCart, increaseQuantity } = useCart();
+  const { cart, removeFromCart, increaseQuantity, decreaseQuantity } = useCart();
 
 
     const totalPrice = cart.reduce((acc, curr) => acc + (Number(curr.item.price) * curr.quantity), 0); 
@@ -47,6 +47,10 @@ console.log("TOTAL PRICE:", totalPrice);
                 increaseQuantity(cartItem.item.id);
             }
 
+            function handleDecrease() {
+                decreaseQuantity(cartItem.item.id);
+            }
+
             
               return (
                 <div
@@ -77,7 +81,7 @@ console.log("TOTAL PRICE:", totalPrice);
 
                     {/* Quantity */}
                     <div className="flex items-center gap-3">
-                      <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-lg font-bold text-gray-600 transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-600">
+                      <button onClick={handleDecrease} className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-lg font-bold text-gray-600 transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-600">
                         −
                       </button>
 
