@@ -13,6 +13,9 @@ import RegisterForm from './components/Register';
 import CustomerStorefront from './pages/CustomerStorefront';
 import Unauthorized from './pages/Unauthorized'; // Yetkisiz erişim sayfasını import ettik
 import CustomerSidebar from './components/CustomerSidebar';
+import CartProvider from "./context/CartContext";
+import Cart from "./pages/Cart";
+
 
 // Rotaları ve Sidebar görünümünü Context'e göre yöneteceğimiz ana gövde
 function AppContent() {
@@ -39,7 +42,9 @@ function AppContent() {
           <Route path="/customers" element={<ProtectedRoute allowedRoles={['admin']}><Customers /></ProtectedRoute>} />
           <Route path="/campaigns" element={<ProtectedRoute allowedRoles={['admin']}><Campaigns /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin']}><Settings /></ProtectedRoute>} />
-          <Route path="/store" element={<ProtectedRoute allowedRoles={['admin','customer']}><CustomerStorefront /></ProtectedRoute>} /> 
+          <Route path="/store" element={<ProtectedRoute allowedRoles={['admin','customer']}><CustomerStorefront /></ProtectedRoute>} />
+          <Route path="/cart" element={<ProtectedRoute allowedRoles={['customer']}><Cart /></ProtectedRoute>} />
+
 
         </Routes>
       </div>
@@ -50,9 +55,11 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <CartProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </CartProvider>
     </AuthProvider>
   );
 }

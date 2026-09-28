@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { createContext, useContext, useState } from "react";
+import { useCart } from "../context/CartContext";
+
 
 interface Product {
   id: number;
@@ -15,6 +17,14 @@ interface ProductCardProps {
 export default function ProductCard({item}:ProductCardProps){
 
   const [quantity, setQuantity] = useState(1);
+  const { addToCart } = useCart();
+
+  
+    
+    const handleAddToCart = () => {
+    addToCart(item, quantity)
+  };
+
  
   function minQuantity(){
 
@@ -188,7 +198,7 @@ export default function ProductCard({item}:ProductCardProps){
 
             </div>
 
-            <button className="mt-6 rounded-xl bg-purple-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-purple-200 transition-all duration-200 hover:bg-purple-700 hover:shadow-lg hover:shadow-purple-200 active:scale-95">
+            <button onClick={handleAddToCart} className="mt-6 rounded-xl bg-purple-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-purple-200 transition-all duration-200 hover:bg-purple-700 hover:shadow-lg hover:shadow-purple-200 active:scale-95">
               Sepete Ekle
             </button>
 
