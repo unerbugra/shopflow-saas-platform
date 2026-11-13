@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
 interface Product {
   id: number;
@@ -30,7 +30,19 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export default function CartProvider({ children }: CartProviderProps) {
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+  const savedCart = localStorage.getItem("shopflow_cart");
+
+  if (savedCart) {
+    return JSON.parse(savedCart);
+  }
+
+  return [];
+});;
+
+useEffect(() => {
+  localStorage.setItem("shopflow_cart", JSON.stringify(cart));
+}, [cart]);
 
   function addToCart(newItem: Product, newQuantity: number) {
 
