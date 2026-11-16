@@ -126,6 +126,207 @@ app.delete('/api/products/:id', async (req: Request, res: Response) => {
   }
 });
 
+
+app.get('/api/cart', authMiddleware, async (req: Request, res: Response) => {
+
+  try {
+
+    const customerId = (req as any).user.id;
+
+    const result = await query(
+      `
+      SELECT
+        ci.product_id,
+        ci.quantity,
+        p.id,
+        p.name,
+        p.description,
+        p.price,
+        p.stock_quantity
+      FROM cart_items ci
+      JOIN products p ON ci.product_id = p.id
+      WHERE ci.customer_id = $1
+      `,
+      [customerId]
+    );
+
+    return res.status(200).json(result.rows);
+
+  } catch (error) {
+
+    console.error("Sepet getirme hatası:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Sepet yüklenirken bir hata oluştu."
+    });
+
+  }
+
+});
+
+app.post('/api/cart/items', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const customerId = (req as any).user.id;
+    const { product_id, quantity } = req.body;
+
+    // 1. Gelen verileri doğrula
+    if (
+      !Number.isSafeInteger(product_id) ||
+      product_id <= 0 ||
+      !Number.isSafeInteger(quantity) ||
+      quantity <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Geçersiz ürün ID'si veya miktar."
+      });
+    }
+
+    const productResult = await query(
+      'SELECT id, stock_quantity FROM products WHERE id = $1',
+      [product_id]
+    );
+
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ürün bulunamadı."
+      });
+    }
+
+    const stock = productResult.rows[0].stock_quantity;
+
+    if (stock === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Ürün stokta bulunmuyor."
+      });
+    }
+
+
+const cartResult = await query(
+  `
+  INSERT INTO cart_items (customer_id, product_id, quantity)
+  SELECT $1::integer, $2::integer, $3::integer
+  WHERE $3::integer <= $4::integer
+
+  ON CONFLICT (customer_id, product_id)
+  DO UPDATE SET
+    quantity = cart_items.quantity + EXCLUDED.quantity
+  WHERE cart_items.quantity + EXCLUDED.quantity <= $4::integer
+
+  RETURNING *;
+  `,
+  [customerId, product_id, quantity, stock]
+);
+
+// Başarısız işlem
+if (cartResult.rows.length === 0) {
+  return res.status(400).json({
+    success: false,
+    message: "Sepete eklemek istediğiniz miktar mevcut stoğu aşıyor."
+  });
+}
+
+// Başarılı işlem
+return res.status(200).json({
+  success: true,
+  message: "Ürün sepete eklendi.",
+  cartItem: cartResult.rows[0]
+});
+
+
+  } catch (error) {
+    console.error("Sepete ekleme hatası:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Ürün sepete eklenirken hata oluştu."
+    });
+  }
+});
+app.patch('/api/cart/items/:productId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    // 1. Kullanıcı ID, ürün ID ve yeni miktarı al
+    const customerId = (req as any).user.id;
+    const productId = Number(req.params.productId);
+    const { quantity } = req.body;
+
+    // 2. Gelen verileri doğrula
+    if (
+      !Number.isSafeInteger(productId) ||
+      productId <= 0 ||
+      !Number.isSafeInteger(quantity) ||
+      quantity <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Geçersiz ürün ID'si veya miktar."
+      });
+    }
+
+    // 3. Ürünün stok bilgisini getir
+    const productResult = await query(
+      'SELECT stock_quantity FROM products WHERE id = $1',
+      [productId]
+    );
+
+    // 4. Ürün mevcut mu?
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ürün bulunamadı."
+      });
+    }
+
+    // 5. Stok kontrolü
+    const stock = productResult.rows[0].stock_quantity;
+
+    if (quantity > stock) {
+      return res.status(400).json({
+        success: false,
+        message: "İstenen miktar mevcut stoğu aşıyor."
+      });
+    }
+
+    // 6. Sepetteki ürün miktarını güncelle
+    const cartResult = await query(
+      `
+      UPDATE cart_items
+      SET quantity = $1
+      WHERE customer_id = $2
+        AND product_id = $3
+      RETURNING *;
+      `,
+      [quantity, customerId, productId]
+    );
+
+    // 7. Ürün kullanıcının sepetinde mevcut mu?
+    if (cartResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ürün sepetinizde bulunamadı."
+      });
+    }
+
+    // 8. Başarılı yanıt
+    return res.status(200).json({
+      success: true,
+      message: "Sepetteki ürün miktarı güncellendi.",
+      cartItem: cartResult.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Sepet miktarı güncelleme hatası:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Sepet miktarı güncellenirken hata oluştu."
+    });
+  }
+});
+
+
 app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
   try {
     const customerId: number = (req as any).user.id; 

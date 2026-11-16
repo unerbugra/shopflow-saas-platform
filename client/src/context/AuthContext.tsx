@@ -36,6 +36,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         // Backend'e token'ın hala geçerli olup olmadığını soruyoruz
         // NOT: Kendi axios instance'ını veya fetch yapını proje mimarine göre güncelleyebilirsin şef
+          console.log("API URL:", import.meta.env.VITE_API_URL);
+
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/verify`, {
           method: 'GET',
           headers: {
