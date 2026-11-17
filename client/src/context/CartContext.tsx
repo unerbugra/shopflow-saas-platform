@@ -33,6 +33,7 @@ interface CartContextType {
   removeFromCart: (productId: number) => Promise<void>;
   increaseQuantity: (productId: number) => Promise<void>;
   decreaseQuantity: (productId: number) => Promise<void>;
+  refreshCart: () => Promise<void>;
 }
 
 interface CartProviderProps {
@@ -50,9 +51,9 @@ export default function CartProvider({ children }: CartProviderProps) {
   const cartRef = useRef<CartItem[]>([]);
   const pendingRef = useRef(false);
 
-  // API'den gelen sepeti mevcut frontend formatına dönüştür
+  // Backend'den gelen sepeti frontend formatına dönüştür
   function formatCart(data: ApiCartItem[]): CartItem[] {
-    return data.map(({ product_id, quantity, ...product }) => ({
+    return data.map(({ quantity, ...product }) => ({
       item: {
         id: product.id,
         name: product.name,
@@ -64,11 +65,11 @@ export default function CartProvider({ children }: CartProviderProps) {
     }));
   }
 
-  // Sepeti PostgreSQL'den yükle
+  // Kullanıcı giriş yaptığında veya sayfa yenilendiğinde sepeti yükle
   useEffect(() => {
     let cancelled = false;
 
-    // Kullanıcı değiştiğinde eski sepeti hemen temizle
+    // Kullanıcı değiştiğinde önceki sepeti temizle
     cartRef.current = [];
     setCart([]);
 
@@ -93,6 +94,7 @@ export default function CartProvider({ children }: CartProviderProps) {
 
         if (!cancelled) {
           const formattedCart = formatCart(data);
+
           cartRef.current = formattedCart;
           setCart(formattedCart);
         }
@@ -110,8 +112,8 @@ export default function CartProvider({ children }: CartProviderProps) {
     };
   }, [user?.id, token, loading]);
 
-  // Sepeti backend'den tekrar getir
-  async function refreshCart(currentToken: string) {
+  // PostgreSQL'den güncel sepet verilerini getir
+  async function fetchCart(currentToken: string) {
     const response = await fetch(`${API_URL}/api/cart`, {
       headers: {
         Authorization: `Bearer ${currentToken}`
@@ -126,14 +128,27 @@ export default function CartProvider({ children }: CartProviderProps) {
     const data: ApiCartItem[] = await response.json();
     const formattedCart = formatCart(data);
 
-    // İstek sırasında kullanıcı değişmiş olabilir
+    // İstek sırasında kullanıcı değişmişse eski sepeti yükleme
     if (localStorage.getItem("shopflow_token") === currentToken) {
       cartRef.current = formattedCart;
       setCart(formattedCart);
     }
   }
 
-  // Ortak API isteği fonksiyonu
+  // Checkout sonrasında sepeti dışarıdan yenileyebilmek için
+  async function refreshCart() {
+    if (!token || !user) {
+      return;
+    }
+
+    try {
+      await fetchCart(token);
+    } catch (error) {
+      console.error("Sepet yenileme hatası:", error);
+    }
+  }
+
+  // POST, PATCH ve DELETE işlemlerinin ortak fonksiyonu
   async function cartRequest(
     path: string,
     method: "POST" | "PATCH" | "DELETE",
@@ -144,7 +159,7 @@ export default function CartProvider({ children }: CartProviderProps) {
       return;
     }
 
-    // Aynı anda birden fazla sepet değişikliğini engelle
+    // Aynı anda birden fazla sepet değiştirme isteğini engelle
     if (pendingRef.current) {
       return;
     }
@@ -163,10 +178,15 @@ export default function CartProvider({ children }: CartProviderProps) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Sepet işlemi başarısız.");
+
+        throw new Error(
+          errorData.message || "Sepet işlemi başarısız."
+        );
       }
 
-      await refreshCart(token);
+      // İşlem başarılıysa PostgreSQL'den güncel sepeti getir
+      await fetchCart(token);
+
     } catch (error) {
       console.error("Sepet işlemi hatası:", error);
     } finally {
@@ -174,7 +194,7 @@ export default function CartProvider({ children }: CartProviderProps) {
     }
   }
 
-  // Ürün ekle: mevcut miktarın üzerine ekler
+  // Sepete ürün ekle
   async function addToCart(newItem: Product, newQuantity: number) {
     if (!Number.isSafeInteger(newQuantity) || newQuantity <= 0) {
       return;
@@ -191,13 +211,15 @@ export default function CartProvider({ children }: CartProviderProps) {
     await cartRequest(`/api/cart/items/${productId}`, "DELETE");
   }
 
-  // Sepetteki miktarı 1 artır
+  // Ürün miktarını 1 artır
   async function increaseQuantity(productId: number) {
     const existingItem = cartRef.current.find(
       i => i.item.id === productId
     );
 
-    if (!existingItem) return;
+    if (!existingItem) {
+      return;
+    }
 
     if (existingItem.quantity >= existingItem.item.stock_quantity) {
       return;
@@ -208,13 +230,15 @@ export default function CartProvider({ children }: CartProviderProps) {
     });
   }
 
-  // Sepetteki miktarı 1 azalt
+  // Ürün miktarını 1 azalt
   async function decreaseQuantity(productId: number) {
     const existingItem = cartRef.current.find(
       i => i.item.id === productId
     );
 
-    if (!existingItem) return;
+    if (!existingItem) {
+      return;
+    }
 
     if (existingItem.quantity <= 1) {
       return;
@@ -232,7 +256,8 @@ export default function CartProvider({ children }: CartProviderProps) {
         addToCart,
         removeFromCart,
         increaseQuantity,
-        decreaseQuantity
+        decreaseQuantity,
+        refreshCart
       }}
     >
       {children}

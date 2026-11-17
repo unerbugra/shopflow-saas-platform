@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { query } from './db.js';
+import { pool, query } from './db.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { NextFunction } from 'express';
@@ -377,63 +377,181 @@ app.delete('/api/cart/items/:productId', authMiddleware, async (req: Request, re
 });
 
 
-app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
-  try {
-    const customerId: number = (req as any).user.id; 
-    const items: { product_id: number; quantity: number; unit_price: number }[] = req.body.items;
 
-    const stockCheck: { stock_quantity: number }[] = await Promise.all(
-      items.map(async (item) => {
-        const result = await query('SELECT stock_quantity FROM products WHERE id = $1', [item.product_id]);
-        if (result.rows.length === 0) {
-          throw new Error(`Ürün ID ${item.product_id} bulunamadı.`);
-        }
-        return result.rows[0]; 
-      })
+app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
+  const customerId = (req as any).user.id;
+
+  // Transaction boyunca tek PostgreSQL bağlantısı
+  const client = await pool.connect().catch(error => {
+    console.error("Veritabanı bağlantı hatası:", error);
+    return null;
+  });
+
+  if (!client) {
+    return res.status(500).json({
+      success: false,
+      message: "Veritabanına bağlanılamadı."
+    });
+  }
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Kullanıcının sepetini getir ve satırları kilitle
+    const cartResult = await client.query(
+      `
+      SELECT product_id, quantity
+      FROM cart_items
+      WHERE customer_id = $1
+      ORDER BY product_id
+      FOR UPDATE;
+      `,
+      [customerId]
     );
 
-    for (let i = 0; i < items.length; i++) {
-      if (stockCheck[i].stock_quantity < items[i].quantity) {
-        return res.status(400).json({ success: false, message: `Ürün ID ${items[i].product_id} için yeterli stok yok.` });
-      }
+    const cartItems = cartResult.rows;
+
+    if (cartItems.length === 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(400).json({
+        success: false,
+        message: "Sepetiniz boş."
+      });
     }
 
-    const totalAmount: number[] = items.map(item => item.quantity * item.unit_price);
+    // 2. Ürünleri sıralı şekilde kilitle ve güncel bilgilerini al
+    const products = [];
 
-    try {
-      await query('BEGIN');
-      
-      const result = await query(
-        'INSERT INTO orders (customer_id, total_amount, status) VALUES ($1, $2, $3) RETURNING id', 
-        [customerId, totalAmount.reduce((a, b) => a + b), 'pending']
+    for (const cartItem of cartItems) {
+      const productResult = await client.query(
+        `
+        SELECT id, name, price, stock_quantity
+        FROM products
+        WHERE id = $1
+        FOR UPDATE;
+        `,
+        [cartItem.product_id]
       );
-      const order_id = result.rows[0].id; 
 
-      for (const item of items) {
-        await query(
-          'INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES ($1, $2, $3, $4)', 
-          [order_id, item.product_id, item.quantity, item.unit_price]
-        );
+      if (productResult.rows.length === 0) {
+        await client.query('ROLLBACK');
 
-        await query(
-          'UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2', 
-          [item.quantity, item.product_id]
-        );
+        return res.status(404).json({
+          success: false,
+          message: `Ürün ID ${cartItem.product_id} bulunamadı.`
+        });
       }
-      
-      await query('COMMIT');
-      return res.status(201).json({ success: true, message: "Sipariş başarıyla oluşturuldu.", order_id }); 
 
-    } catch (error: any) {
-      await query('ROLLBACK');
-      throw error; 
+      const product = productResult.rows[0];
+
+      if (product.stock_quantity < cartItem.quantity) {
+        await client.query('ROLLBACK');
+
+        return res.status(400).json({
+          success: false,
+          message: `${product.name} için yeterli stok yok.`
+        });
+      }
+
+      products.push({
+        product_id: product.id,
+        quantity: cartItem.quantity,
+        unit_price: product.price
+      });
     }
 
-  } catch (error: any) {
-    console.error("Sipariş hatası:", error.message);
-    return res.status(500).json({ success: false, message: error.message || "Sunucu hatası." });
+    // 3. Toplam tutarı PostgreSQL NUMERIC aritmetiğiyle hesapla
+    const totalResult = await client.query(
+      `
+      SELECT SUM(
+        p.price * ci.quantity
+      ) AS total_amount
+      FROM cart_items ci
+      JOIN products p ON p.id = ci.product_id
+      WHERE ci.customer_id = $1;
+      `,
+      [customerId]
+    );
+
+    const totalAmount = totalResult.rows[0].total_amount;
+
+    // 4. Sipariş kaydını oluştur
+    const orderResult = await client.query(
+      `
+      INSERT INTO orders (customer_id, total_amount, status)
+      VALUES ($1, $2, $3)
+      RETURNING id;
+      `,
+      [customerId, totalAmount, 'pending']
+    );
+
+    const orderId = orderResult.rows[0].id;
+
+    // 5. Sipariş kalemlerini kaydet ve stokları azalt
+    for (const product of products) {
+      await client.query(
+        `
+        INSERT INTO order_items
+          (order_id, product_id, quantity, unit_price)
+        VALUES ($1, $2, $3, $4);
+        `,
+        [
+          orderId,
+          product.product_id,
+          product.quantity,
+          product.unit_price
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE products
+        SET stock_quantity = stock_quantity - $1
+        WHERE id = $2;
+        `,
+        [product.quantity, product.product_id]
+      );
+    }
+
+    // 6. Sipariş başarılıysa sepeti temizle
+    await client.query(
+      `
+      DELETE FROM cart_items
+      WHERE customer_id = $1;
+      `,
+      [customerId]
+    );
+
+    // 7. Tüm işlemleri kalıcı hale getir
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      success: true,
+      message: "Sipariş başarıyla oluşturuldu.",
+      order_id: orderId
+    });
+
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error("Rollback hatası:", rollbackError);
+    }
+
+    console.error("Sipariş oluşturma hatası:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Sipariş oluşturulurken bir hata oluştu."
+    });
+
+  } finally {
+    // Bağlantıyı havuza geri bırak
+    client.release();
   }
-}); 
+});
+
 
 
 app.post('/api/auth/register', async (req: Request, res: Response) => {  
