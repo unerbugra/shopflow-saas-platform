@@ -326,6 +326,56 @@ app.patch('/api/cart/items/:productId', authMiddleware, async (req: Request, res
   }
 });
 
+app.delete('/api/cart/items/:productId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    // 1. Kullanıcı ve ürün ID'sini al
+    const customerId = (req as any).user.id;
+    const productId = Number(req.params.productId);
+
+    // 2. Ürün ID'sini doğrula
+    if (!Number.isSafeInteger(productId) || productId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Geçersiz ürün ID'si."
+      });
+    }
+
+    // 3. Ürünü kullanıcının sepetinden sil
+    const cartResult = await query(
+      `
+      DELETE FROM cart_items
+      WHERE customer_id = $1
+        AND product_id = $2
+      RETURNING *;
+      `,
+      [customerId, productId]
+    );
+
+    // 4. Sepette böyle bir ürün var mıydı?
+    if (cartResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ürün sepetinizde bulunamadı."
+      });
+    }
+
+    // 5. Başarılı yanıt
+    return res.status(200).json({
+      success: true,
+      message: "Ürün sepetten kaldırıldı.",
+      deletedItem: cartResult.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Sepetten ürün silme hatası:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Ürün sepetten kaldırılırken hata oluştu."
+    });
+  }
+});
+
 
 app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
   try {
