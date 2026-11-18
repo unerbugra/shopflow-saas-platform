@@ -553,6 +553,46 @@ app.post('/api/orders', authMiddleware, async (req: Request, res: Response) => {
 });
 
 
+app.get('/api/admin/orders', authMiddleware, async (req: Request, res: Response) => {
+
+  const userRole = (req as any).user.role;
+
+  if (userRole !== "admin") {
+    return res.status(403).json({
+      success: false,
+      message: "Bu işlem için yetkiniz bulunmamaktadır."
+    });
+  }
+
+  try {
+    const orderResult = await query(
+      `
+      SELECT *
+      FROM orders
+      ORDER BY created_at DESC, id DESC;
+      `
+    );
+
+    const orders = orderResult.rows;
+
+    return res.status(200).json({
+      success: true,
+      data: orders
+    });
+
+  } catch (error) {
+    console.error("Sipariş listeleme hatası:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Siparişler getirilirken bir hata oluştu."
+    });
+  }
+
+});
+
+
+
 
 app.post('/api/auth/register', async (req: Request, res: Response) => {  
   const { first_name, last_name, email, password, phone, address } = req.body;
@@ -639,7 +679,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         role: user.role
       }
     });
-
+  
   } catch (error) {
     console.error('Error during login:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
